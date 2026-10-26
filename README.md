@@ -23,10 +23,14 @@ page.
               PWM on G32, G33, G26  ->  R / G / B
 ```
 
+**The name is the ambition.** Today it reacts to rhythmic and spectral features:
+beats, band energy, onsets. The intent is to climb to *musical* meaning — chords,
+keys, scales — and, when there is a voice, to actual semantics. That ladder from
+signal to meaning is mapped out in [IDEAS.md](IDEAS.md).
+
 **Status:** a hobby project that works, shared because people asked. It runs at
 ~31 fps, uses 19 % of the RAM, and the audio path is honest about its limits (see
-[Accuracy](#accuracy)). Written for one specific board and three LEDs; the ideas
-that would make it bigger are in [IDEAS.md](IDEAS.md).
+[Accuracy](#accuracy)).
 
 ---
 
@@ -606,6 +610,10 @@ BSD dominate precisely so people can copy snippets freely.
 
 ## Credits
 
+**Author:** Alvaro Cassinelli.
+
+Built on the work of others:
+
 - [M5Unified / M5GFX](https://github.com/m5stack/M5Unified) — board support, display,
   microphone. The PDM capture that makes all of this possible is theirs.
 - [ESP-DSP](https://github.com/espressif/esp-dsp) — the optimised FFT.
@@ -614,5 +622,6 @@ BSD dominate precisely so people can copy snippets freely.
   runs through most real-time onset detectors; the tempo estimate is the median
   inter-onset interval.
 
-Ideas for what comes next — voice activity detection, a semantic "AIqualizer", OSC
-control, a manual colour pad — are in [IDEAS.md](IDEAS.md).
+Ideas for what comes next — harmonic analysis (chords, keys, scales), voice activity
+detection, a semantic "AIqualizer", OSC control, a manual colour pad — are in
+[IDEAS.md](IDEAS.md), organised as the climb from signal to meaning.
