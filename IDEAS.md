@@ -1,10 +1,13 @@
 # Ideas & Roadmap
 
-Working notes for the sound-reactive light. Everything here is a candidate, not a
-promise — the **Status** column says where each one stands.
+Working notes for the light show. Everything here is a candidate, not a promise —
+the **Status** column says where each one stands.
 
-The repository name is the ambition: react not only to *features of the signal* but
-to **musical structure**, and eventually to **meaning**.
+The direction is the point: react not only to *features of the signal* but to
+**musical structure**, and eventually to **meaning**. The speech half of that lives
+in a separate project,
+[voiceAnonymizer_PI](https://github.com/alvarohub/voiceAnonymizer_PI), because it
+needs more compute than this board has.
 
 | # | Idea | Level | Status |
 |---|------|-------|--------|
@@ -15,7 +18,7 @@ to **musical structure**, and eventually to **meaning**.
 | 5 | Remote control API (OSC over Wi-Fi) | plumbing | Idea |
 | 6 | Manual mode — tap pad, 2D colour trajectories | interaction | Idea |
 | 7 | Glow modulated by loudness / pitch / beat | musical structure | **Partly done** (beat sync) |
-| — | [FFT backend choice](README.md#fft-backends) (ESP-DSP / arduinoFFT) | plumbing | **Done** |
+| — | [FFT backend choice](docs/build-and-flash.md#fft-backends) (ESP-DSP / arduinoFFT) | plumbing | **Done** |
 
 ---
 
@@ -173,6 +176,11 @@ well-regarded ONNX model.
 noise changes the installation completely — it becomes a "listen to me" object
 rather than a music visualiser. It also unlocks idea 4 (prosody analysis needs to
 know when someone is actually talking).
+
+**Prior art of my own**:
+[MisophonicCompressor](https://github.com/alvarohub/MisophonicCompressor) already
+runs Silero VAD to gate an audio compressor, so the model plumbing is solved there
+and can be lifted.
 
 **Feasibility**
 
