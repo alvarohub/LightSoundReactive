@@ -1,9 +1,9 @@
 #include "audio_fft.h"
 
 #include "config.h"
+#include "fft_backend.h"
 
 #include <M5Unified.h>
-#include <arduinoFFT.h>
 #include <math.h>
 
 namespace {
@@ -23,9 +23,6 @@ constexpr float kBandAttack = 0.60f;
 constexpr float kBandRelease = 0.15f;
 
 constexpr float kFullScale = 32768.0f;
-// Hann window (coherent gain 0.5) turns a sine of amplitude A into a peak
-// magnitude of A * N / 4, so this normalises a full-scale sine to 1.0.
-constexpr float kMagRef = kFullScale * (float)SpectrumAnalyzer::kSamples / 4.0f;
 
 inline float clamp01(float v) { return v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v); }
 
@@ -45,6 +42,10 @@ bool SpectrumAnalyzer::begin(uint32_t sampleRateHz) {
     return false;
   }
   computeBandEdges();
+
+  if (!fftb::begin(kSamples)) {
+    return false; // the selected FFT backend could not start
+  }
 
   for (size_t b = 0; b < kBands; b++) {
     band_[b] = 0.0f;
@@ -108,13 +109,7 @@ bool SpectrumAnalyzer::update() {
   }
   const float rms = sqrtf(energy / (float)kSamples);
 
-  ArduinoFFT<float> fft(re_, im_, (uint_fast16_t)kSamples, (float)sampleRate_);
-  fft.windowing(FFTWindow::Hann, FFTDirection::Forward);
-  fft.compute(FFTDirection::Forward);
-
-  for (size_t i = 1; i < kBins; i++) {
-    mag_[i] = sqrtf(re_[i] * re_[i] + im_[i] * im_[i]) / kMagRef;
-  }
+  fftb::magnitude(re_, im_, mag_, kSamples);
 
   // Spectral flux: how much the spectrum grew since the previous frame. Only
   // rises count, so the decay of a note is not mistaken for a new onset.
@@ -205,13 +200,13 @@ float SpectrumAnalyzer::bandLevel(float centerHz, float widthHz) const {
     sum += mag_[i] * mag_[i];
   }
 
-  // Parseval gives sum(|X|^2) = 3/32 * A^2 * N^2 for a Hann-windowed tone, and
-  // mag_ is |X| scaled by kMagRef = FS * N / 4, so RMS/FS = sqrt(sum/3).
-  // The small extra factor matches arduinoFFT's actual window coefficients, so
-  // a window covering the whole range reads exactly like the broadband
-  // time-domain level and gate/attack settings transfer between the two.
-  constexpr float kBandPowerNorm = 3.49f;
-  const float rms = sqrtf(sum / kBandPowerNorm);
+  // Parseval: the one-sided sum of squared magnitudes of a windowed tone is
+  // proportional to A^2 * N^2, and mag_ is |X| scaled by magRef = FS * N / 4, so
+  // RMS/FS = sqrt(sum / norm). The divisor depends on the window each backend
+  // applies, so it comes from the backend: a window covering the whole range then
+  // reads exactly like the broadband time-domain level, and gate/attack settings
+  // transfer between the two.
+  const float rms = sqrtf(sum / fftb::bandPowerNorm());
   const float db = 20.0f * log10f(rms + 1e-9f) + (float)gainDb_;
   return clamp01((db - kLevelFloorDb) / (kLevelFullDb - kLevelFloorDb));
 }
