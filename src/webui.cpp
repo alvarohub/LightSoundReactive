@@ -15,13 +15,15 @@ const char kPage[] PROGMEM = R"PAGE(<!doctype html>
 <style>
 :root{color-scheme:dark}
 *{box-sizing:border-box}
-body{margin:0 auto;padding:14px;max-width:520px;background:#0f1115;color:#e6edf3;font:16px/1.45 system-ui,-apple-system,sans-serif}
+/* Right 1/6 of the viewport (16.7vw) is kept empty as a safe thumb-scroll gutter. */
+body{margin:0;padding:14px 16.7vw 24px 12px;max-width:640px;background:#0f1115;color:#e6edf3;font:16px/1.45 system-ui,-apple-system,sans-serif;border-right:1px dashed #21262e}
 h1{margin:0 0 12px;font-size:1.15rem;font-weight:600}
 .card{background:#171b21;border:1px solid #262c36;border-radius:12px;padding:12px 14px;margin-bottom:10px}
 .seg{display:flex;gap:8px}
 /* The channel buttons are tabs: the thick ring marks which one you are editing,
    the fill marks whether that channel is powered on (green) or off (red). */
 .seg button{flex:1;padding:11px 8px;font-size:.95rem;border-radius:9px;border:2px solid #3a424d;background:#21262e;color:#8b949e;font-weight:600}
+.seg button:disabled{opacity:.3;cursor:not-allowed}
 .seg button.on{background:#17301e;border-color:#2ea043;color:#7ee787}
 .seg button.off{background:#2b1d1d;border-color:#6b2b2b;color:#ff9d95}
 .seg button.sel{outline:3px solid #58a6ff;outline-offset:2px}
@@ -35,7 +37,7 @@ input[type=range]::-moz-range-track{height:6px;border-radius:3px;background:#2b3
 input[type=range]::-moz-range-thumb{width:22px;height:22px;border:0;border-radius:50%;background:#3fb950}
 .bar{height:9px;border-radius:5px;background:#2b323c;overflow:hidden;margin-top:6px}
 .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#3fb950,#d29922,#f85149)}
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
 .stats div{background:#21262e;border-radius:9px;padding:8px 4px;text-align:center}
 .stats span{display:block;font-size:.68rem;letter-spacing:.04em;color:#8b949e;text-transform:uppercase}
 .stats b{font-size:.95rem;font-variant-numeric:tabular-nums}
@@ -54,21 +56,23 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border:0;border-radiu
 .sw input:checked + i:before{transform:translateX(24px);background:#fff}
 .ptitle{margin:0 0 10px;padding-left:9px;border-left:4px solid #58a6ff;font-weight:600;color:#f0f6fc}
 .ptitle small{display:block;font-weight:400;font-size:.76rem;color:#8b949e;margin-top:2px}
+/* Three-disk fingertip drum set */
+.drums{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:6px 0 10px;padding:4px 2px}
+.drum{position:relative;aspect-ratio:1;width:100%;border-radius:50%;border:3px solid var(--c,#58a6ff);background:radial-gradient(circle at 38% 35%,rgba(255,255,255,.16),rgba(15,17,21,.92) 70%);color:#f0f6fc;font-weight:700;font-size:1.15rem;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;user-select:none;-webkit-user-select:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation;box-shadow:0 0 14px -4px var(--c,#58a6ff),inset 0 0 18px rgba(0,0,0,.75);transition:transform 60ms ease,box-shadow 90ms ease,background 90ms ease}
+.drum small{font-size:.66rem;font-weight:500;color:#8b949e;margin-top:2px;letter-spacing:.03em;text-transform:uppercase}
+.drum.hit{transform:scale(.92);background:radial-gradient(circle at 50% 50%,#fff 0%,var(--c,#58a6ff) 55%,#171b21 100%);box-shadow:0 0 28px 4px var(--c,#58a6ff),inset 0 0 12px #fff;color:#0f1115}
+.drum.hit small{color:#0f1115}
+.drum.off{opacity:.4;border-style:dashed}
 </style>
 </head>
 <body>
 <h1>Sound Light</h1>
-<div class=card><div class=seg id=pick></div></div>
-<div class=card id=params></div>
 <div class=card>
 <div class=row><span>Microphone gain</span><b id=gainDbv>-</b></div>
 <input type=range id=gainDb min=0 max=18 step=6>
 <div class=row><span>Beat sensitivity</span><b id=beatSensitivityPctv>-</b></div>
 <input type=range id=beatSensitivityPct min=0 max=100 step=5>
-</div>
-<div class=card>
-<div id=meters></div>
-<div class=row><span>Beat</span><b id=bpmv>-</b></div>
+<div class=row><span>Detected beat</span><b id=bpmv>--</b></div>
 <div class=bar><i id=beatbar style="background:#d29922"></i></div>
 <div class=stats>
 <div><span>Level</span><b id=sLvl>0%</b></div>
@@ -76,6 +80,14 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border:0;border-radiu
 <div><span>Peak</span><b id=sPk>-</b></div>
 </div>
 </div>
+<div class=card>
+<div class=row style="margin-top:0"><span>Drum pads (tap with fingertip)</span><b id=drumhint style="color:#8b949e;font-weight:400;font-size:.76rem">triggers pulse + echo</b></div>
+<div class=drums id=drums></div>
+<div class=row><span>Edit channel</span><b></b></div>
+<div class=seg id=pick></div>
+<div id=meters style="margin-top:8px"></div>
+</div>
+<div class=card id=params></div>
 <div class=card>
 <div class=row><span>Presets</span><b id=pmsg></b></div>
 <div class=grid>
@@ -88,42 +100,78 @@ input[type=range]::-moz-range-thumb{width:22px;height:22px;border:0;border-radiu
 </div>
 <script>
 var SPEC=[
+{k:'beatBoostPct',g:'beat',n:'Beat flash strength',min:0,max:100,st:5,u:'%'},
 {k:'centerHz',g:'reactive',n:'Center frequency',min:65,max:7600,st:5,u:'Hz'},
 {k:'widthHz',g:'reactive',n:'Band width',min:40,max:16000,st:10,u:'Hz'},
 {k:'attackMs',g:'reactive',n:'Attack (0 = instant)',min:0,max:1000,st:5,u:'ms'},
-{k:'releaseMs',g:'reactive',n:'Release / decay',min:0,max:2000,st:5,u:'ms'},
+{k:'releaseMs',g:'env',n:'Release / decay',min:0,max:2000,st:5,u:'ms'},
 {k:'gatePct',g:'reactive',n:'Noise gate',min:0,max:50,st:1,u:'%'},
-{k:'echoCount',g:'reactive',n:'Echo repeats (0 = off)',min:0,max:10,st:1,u:''},
-{k:'echoSpacingMs',g:'reactive',n:'Echo spacing',min:20,max:500,st:5,u:'ms'},
-{k:'echoFeedbackPct',g:'reactive',n:'Echo decay each repeat',min:0,max:90,st:5,u:'%'},
-{k:'beatBoostPct',g:'reactive',n:'Beat flash strength',min:0,max:100,st:5,u:'%'},
+{k:'echoCount',g:'env',n:'Echo repeats (0 = off)',min:0,max:10,st:1,u:''},
+{k:'echoSpacingMs',g:'env',n:'Echo spacing',min:20,max:500,st:5,u:'ms'},
+{k:'echoFeedbackPct',g:'env',n:'Echo decay each repeat',min:0,max:90,st:5,u:'%'},
 {k:'glowPeriodMs',g:'glow',n:'Period',min:100,max:5000,st:10,u:'ms'},
 {k:'glowMinPct',g:'glow',n:'Dim level',min:0,max:100,st:1,u:'%'},
 {k:'glowMaxPct',g:'glow',n:'Bright level',min:0,max:100,st:1,u:'%'}
 ];
 var sel=0, st=null, seeded=false, built=false;
-var NAMES=['R','G','B'], COLS=['#f85149','#3fb950','#58a6ff'];
+var NAMES=['R','G','B'], COLS=['#f85149','#3fb950','#58a6ff'], MODES=['reactive','glow','manual'];
+var holdTimers={};
 function byId(id){return document.getElementById(id);}
 function nameOf(i){return NAMES[i]||('L'+(i+1));}
 function colOf(i){return COLS[i]||'#8b949e';}
+function modeName(m){return MODES[m]||'reactive';}
+function padDown(i){
+var d=byId('drm'+i);
+if(d)d.classList.add('hit');
+fetch('/api/tap?led='+i+'&down=1',{method:'POST'}).catch(function(){});
+clearInterval(holdTimers[i]);
+holdTimers[i]=setInterval(function(){
+  fetch('/api/tap?led='+i+'&down=1',{method:'POST'}).catch(function(){});
+},1000);
+}
+function padUp(i){
+clearInterval(holdTimers[i]);
+holdTimers[i]=0;
+var d=byId('drm'+i);
+if(d&&d.classList.contains('hit')){
+  d.classList.remove('hit');
+  fetch('/api/tap?led='+i+'&down=0',{method:'POST'}).catch(function(){});
+}
+}
 function buildLights(n){
-var p='', m='';
+var p='', m='', d='';
 for(var i=0;i<n;i++){
 p+='<button id=sel'+i+'>'+nameOf(i)+'</button>';
+d+='<button type=button class=drum id=drm'+i+' style="--c:'+colOf(i)+'"><span>'+nameOf(i)+'</span><small id=dsub'+i+'>tap</small></button>';
 m+='<div class=row><span>'+nameOf(i)+' out</span><b id=p'+i+'>0%</b></div>'
  +'<div class=bar><i id=b'+i+' style="background:'+colOf(i)+'"></i></div>';
 }
 byId('pick').innerHTML=p;
+byId('drums').innerHTML=d;
 byId('meters').innerHTML=m;
-for(var j=0;j<n;j++)byId('sel'+j).onclick=(function(k){return function(){sel=k;fill();live();};})(j);
+for(var j=0;j<n;j++){
+byId('sel'+j).onclick=(function(k){return function(){sel=k;fill();live();};})(j);
+(function(k){
+  var pad=byId('drm'+k);
+  pad.addEventListener('pointerdown',function(e){
+    e.preventDefault();
+    if(pad.setPointerCapture){try{pad.setPointerCapture(e.pointerId);}catch(_){}}
+    padDown(k);
+  });
+  pad.addEventListener('pointerup',function(){padUp(k);});
+  pad.addEventListener('pointercancel',function(){padUp(k);});
+  pad.addEventListener('lostpointercapture',function(){padUp(k);});
+  pad.addEventListener('contextmenu',function(e){e.preventDefault();});
+})(j);
+}
 }
 function build(){
 var box=byId('params');
 box.innerHTML='<div class=ptitle id=ptitle></div>'
 +'<div class=row><span>Power</span><label class=sw><input type=checkbox id=pwr><i></i></label></div>'
 +'<div class=row><span>Mode</span><b></b></div>'
-+'<div class=seg><button id=bm0>Reactive</button><button id=bm1>Glow</button></div>'
-+'<div class=row><span>Beat detection</span><b></b></div>'
++'<div class=seg><button id=bm0>Reactive</button><button id=bm1>Glow</button><button id=bm2>Manual</button></div>'
++'<div class=row><span>Beat effect</span><b id=bpmv2>--</b></div>'
 +'<div class=seg><button id=bt0>Off</button><button id=bt1>Flash</button><button id=bt2>Sync glow</button></div>'
 +'<div class="hint" id=beathint></div>';
 SPEC.forEach(function(s){
@@ -134,8 +182,16 @@ i.addEventListener('input',labels);
 i.addEventListener('change',function(){send(sel,s.k,i.value);});
 });
 byId('pwr').addEventListener('change',function(){send(sel,'enabled',byId('pwr').checked?1:0);});
-byId('bm0').onclick=function(){send(sel,'mode',0);};
-byId('bm1').onclick=function(){send(sel,'mode',1);};
+function setMode(m){
+if(m!==1&&st&&st.leds[sel].beatMode===2){
+  fetch('/api/params?led='+sel+'&mode='+m+'&beatMode=0',{method:'POST'}).then(function(r){return r.json();}).then(function(s){st=s;fill();live();});
+}else{
+  send(sel,'mode',m);
+}
+}
+byId('bm0').onclick=function(){setMode(0);};
+byId('bm1').onclick=function(){setMode(1);};
+byId('bm2').onclick=function(){setMode(2);};
 byId('bt0').onclick=function(){send(sel,'beatMode',0);};
 byId('bt1').onclick=function(){send(sel,'beatMode',1);};
 byId('bt2').onclick=function(){send(sel,'beatMode',2);};
@@ -146,35 +202,63 @@ var c=+byId('centerHz').value, w=+byId('widthHz').value;
 var lo=Math.max(65,Math.round(c-w/2)), hi=Math.min(7600,Math.round(c+w/2));
 byId('win').textContent='listens to '+lo+' - '+hi+' Hz';
 }
+function updateBeatHint(){
+if(!st)return;
+var L=st.leds[sel];
+var b=(L.beatMode||0);
+var hint=byId('beathint');
+if(!hint)return;
+if(b===0){
+  hint.textContent='Beat detector ignored on this channel.';
+}else if(b===1){
+  hint.textContent=L.mode===1
+    ?'Each beat adds a flash on top of the breathing glow.'
+    :(L.mode===2
+      ?'Each beat adds an automatic flash alongside your manual drum taps.'
+      :'Each beat adds a flash on top of the sound-reactive level.');
+}else{
+  if(L.mode!==1){
+    hint.textContent='Sync glow only applies in Glow mode (switch Mode to Glow, or choose Flash).';
+  }else if(st.bpm>0){
+    hint.textContent='Glow period locked to '+Math.round(60000/st.bpm)+' ms ('+st.bpm+' BPM), peaking on each beat.';
+  }else{
+    hint.textContent='Waiting for a steady beat — using manual Period ('+L.glowPeriodMs+' ms) until locked.';
+  }
+}
+}
 function fill(){
 if(!st)return;
 var L=st.leds[sel];
 SPEC.forEach(function(s){byId(s.k).value=L[s.k];});
 byId('pwr').checked=!!L.enabled;
 // Same convention as the channel tabs: the ring marks the choice.
-byId('bm0').className=L.mode?'':'sel';
-byId('bm1').className=L.mode?'sel':'';
+byId('bm0').className=L.mode===0?'sel':'';
+byId('bm1').className=L.mode===1?'sel':'';
+byId('bm2').className=L.mode===2?'sel':'';
 var b=(L.beatMode||0);
 byId('bt0').className=b===0?'sel':'';
 byId('bt1').className=b===1?'sel':'';
 byId('bt2').className=b===2?'sel':'';
-// The boost only matters in flash mode; sync glow only in glow mode.
-var boost=document.querySelectorAll('.r-beatBoostPct');
+// Sync glow only makes sense when the channel is in Glow mode.
+byId('bt2').disabled=(L.mode!==1);
+// Flash strength applies whenever Flash (b===1) is chosen.
+var i,boost=document.querySelectorAll('.r-beatBoostPct');
 for(i=0;i<boost.length;i++)boost[i].style.display=b===1?'':'none';
-var hint=byId('beathint');
-if(hint)hint.textContent=b===0?'off':(b===1
-  ?'each beat adds a flash on top of the level'
-  :'glow period follows the tempo and peaks on the beat');
 // The panel header names the channel being edited, so the tab ring is never the
 // only clue.
 byId('ptitle').style.borderLeftColor=colOf(sel);
 byId('ptitle').innerHTML='Channel '+nameOf(sel)+'<small>'
 +(L.enabled?'powered on':'powered off')+' &middot; '
-+(L.mode?'glow':'reactive')+' &middot; '+L.centerHz+' Hz</small>';
-var i,g=document.querySelectorAll('.g-reactive'),h=document.querySelectorAll('.g-glow');
-for(i=0;i<g.length;i++)g[i].style.display=L.mode?'none':'';
-for(i=0;i<h.length;i++)h[i].style.display=L.mode?'':'none';
++modeName(L.mode)
++(L.mode===0?(' &middot; '+L.centerHz+' Hz'):'')+'</small>';
+var g=document.querySelectorAll('.g-reactive'),
+    e=document.querySelectorAll('.g-env'),
+    h=document.querySelectorAll('.g-glow');
+for(i=0;i<g.length;i++)g[i].style.display=L.mode===0?'':'none';
+for(i=0;i<e.length;i++)e[i].style.display=(L.mode===0||L.mode===2)?'':'none';
+for(i=0;i<h.length;i++)h[i].style.display=L.mode===1?'':'none';
 labels();
+updateBeatHint();
 }
 function fillGain(){
 if(!st)return;
@@ -193,14 +277,24 @@ byId('p'+i).textContent=on?st.leds[i].brightPct+'%':'off';
 byId('sel'+i).textContent=nameOf(i);
 byId('sel'+i).className=(sel===i?'sel ':'')+(on?'on':'off');
 byId('sel'+i).title=nameOf(i)+(on?' (on)':' (off)');
+var d=byId('drm'+i), dsub=byId('dsub'+i);
+if(d){
+  d.classList.toggle('off',!on);
+}
+if(dsub){
+  dsub.textContent=on?modeName(st.leds[i].mode):'off';
+}
 }
 byId('sLvl').textContent=st.levelPct+'%';
 byId('sDb').textContent=st.dbfs;
 byId('sPk').textContent=st.peakHz+' Hz';
-byId('bpmv').textContent=st.bpm>0?(st.bpm+' BPM'):'--';
+var bpmTxt=st.bpm>0?(st.bpm+' BPM'):'--';
+byId('bpmv').textContent=bpmTxt;
+if(byId('bpmv2'))byId('bpmv2').textContent=bpmTxt;
 byId('beatbar').style.width=st.beatPct+'%';
 byId('lp1').disabled=!st.hasPreset0;
 byId('lp2').disabled=!st.hasPreset1;
+updateBeatHint();
 }
 function apply(s){
 st=s;
@@ -306,6 +400,7 @@ void WebUi::bindRoutes() {
   server_.on("/", [this] { handleRoot(); });
   server_.on("/api/state", [this] { handleState(); });
   server_.on("/api/params", HTTP_POST, [this] { handleParams(); });
+  server_.on("/api/tap", HTTP_POST, [this] { handleTap(); });
   server_.on("/api/preset", HTTP_POST, [this] { handlePreset(); });
   server_.on("/api/reset", HTTP_POST, [this] { handleReset(); });
   server_.onNotFound([this] {
@@ -410,6 +505,19 @@ void WebUi::handleParams() {
 
   server_.sendHeader("Cache-Control", "no-store");
   server_.send(200, "application/json", stateJson());
+}
+
+void WebUi::handleTap() {
+  const int index = server_.hasArg("led") ? server_.arg("led").toInt() : -1;
+  if (index >= 0 && index < (int)kLedCount) {
+    if (server_.hasArg("down")) {
+      const int down = server_.arg("down").toInt();
+      pendingHold_[index] = down ? 1 : 0;
+    } else {
+      pendingTap_[index] = true;
+    }
+  }
+  server_.send(204, "text/plain", "");
 }
 
 void WebUi::handlePreset() {

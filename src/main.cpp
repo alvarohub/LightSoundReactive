@@ -188,12 +188,15 @@ void formatHz(char *out, size_t len, uint16_t hz) {
   }
 }
 
-// 'R' reactive, 'G' glow, '-' switched off.
+// 'R' reactive, 'G' glow, 'M' manual, '-' switched off.
 char modeChar(size_t i) {
   if (!settings.led[i].enabled) {
     return '-';
   }
-  return settings.led[i].mode == LedSettings::kGlow ? 'G' : 'R';
+  if (settings.led[i].mode == LedSettings::kGlow) {
+    return 'G';
+  }
+  return settings.led[i].mode == LedSettings::kManual ? 'M' : 'R';
 }
 
 // A background colour is given to every glyph, so the text clears itself and the
@@ -303,9 +306,7 @@ void finishBanner() {
 }
 
 void toggleMode(size_t i) {
-  settings.led[i].mode = settings.led[i].mode == LedSettings::kReactive
-                             ? LedSettings::kGlow
-                             : LedSettings::kReactive;
+  settings.led[i].mode = (uint8_t)((settings.led[i].mode + 1) % 3);
   noteSettingsChanged();
   lastHud = 0;
 }
@@ -454,11 +455,18 @@ void loop() {
 
   for (size_t i = 0; i < kLedCount; i++) {
     const LedSettings &s = settings.led[i];
-    // Each light only watches its own window. Glow ignores the microphone, and a
-    // switched-off light does not need a band either.
+    // Each light only watches its own window. Glow and Manual ignore the
+    // microphone, and a switched-off light does not need a band either.
     const float level = (s.enabled && s.mode == LedSettings::kReactive)
                             ? analyzer.bandLevel((float)s.centerHz, (float)s.widthHz)
                             : 0.0f;
+    const int8_t hold = web.consumeHold(i);
+    if (hold >= 0) {
+      leds[i].setHeld(hold > 0);
+    }
+    if (web.consumeTap(i)) {
+      leds[i].trigger();
+    }
     const uint32_t duty = leds[i].update(s, level, beat, dtMs);
     pwmWrite(i, duty);
 

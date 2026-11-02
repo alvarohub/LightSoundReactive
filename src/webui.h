@@ -42,6 +42,25 @@ public:
     return changed;
   }
 
+  // True if the user tapped this channel's drum disk since the last frame.
+  bool consumeTap(size_t i) {
+    if (i >= kLedCount || !pendingTap_[i]) {
+      return false;
+    }
+    pendingTap_[i] = false;
+    return true;
+  }
+
+  // Returns -1 if unchanged, 0 if released, 1 if pressed/held since last frame.
+  int8_t consumeHold(size_t i) {
+    if (i >= kLedCount) {
+      return -1;
+    }
+    const int8_t v = pendingHold_[i];
+    pendingHold_[i] = -1;
+    return v;
+  }
+
   bool enabled() const { return enabled_; }
   bool setEnabled(bool on);
   String ip() const;
@@ -53,6 +72,7 @@ private:
   void handleRoot();
   void handleState();
   void handleParams();
+  void handleTap();
   void handlePreset();
   void handleReset();
   void applyArg(const char *name, uint8_t *dst);
@@ -62,6 +82,8 @@ private:
   Settings *settings_ = nullptr;
   SettingsStore *store_ = nullptr;
   Telemetry tele_;
+  bool pendingTap_[kLedCount] = {};
+  int8_t pendingHold_[kLedCount] = {-1, -1, -1};
   bool enabled_ = false;
   bool routesBound_ = false;
   bool changed_ = false;

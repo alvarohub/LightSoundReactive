@@ -10,6 +10,7 @@ struct LedSettings {
   enum Mode : uint8_t {
     kReactive = 0, // brightness follows the music, within this light's band
     kGlow = 1,     // slow breathing, independent of the microphone
+    kManual = 2,   // silent until triggered by the fingertip drum pad (or beat flash)
   };
 
   uint8_t mode = kReactive;
@@ -81,7 +82,7 @@ inline uint8_t clampU8(int32_t v, uint8_t lo, uint8_t hi) {
 }
 
 inline void clampLedSettings(LedSettings &l) {
-  l.mode = l.mode == LedSettings::kGlow ? LedSettings::kGlow : LedSettings::kReactive;
+  l.mode = clampU8(l.mode, LedSettings::kReactive, LedSettings::kManual);
   l.enabled = l.enabled ? 1 : 0;
 
   l.centerHz = clampU16(l.centerHz, Settings::kMinCenterHz, Settings::kMaxCenterHz);

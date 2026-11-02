@@ -36,6 +36,10 @@ void Led::begin(int pin, uint8_t channel) {
   sinceOnsetMs_ = 1000000u;
   onsetRef_ = 0.0f;
   armed_ = true;
+  pendingTap_ = false;
+  held_ = false;
+  heldMs_ = 0;
+  tapPulse_ = 0.0f;
 }
 
 uint32_t Led::update(const LedSettings &s, float level, const BeatInfo &beat,
@@ -55,6 +59,30 @@ uint32_t Led::update(const LedSettings &s, float level, const BeatInfo &beat,
     sinceOnsetMs_ = 1000000u;
     onsetRef_ = 0.0f;
     armed_ = true;
+    tapPulse_ = 0.0f;
+  }
+
+  // Safety timeout: if the browser disconnects while holding a pad, release
+  // automatically after 2.5 s without a keepalive.
+  if (held_) {
+    heldMs_ += dtMs;
+    if (heldMs_ > 2500u) {
+      held_ = false;
+    }
+  }
+
+  const bool activeTap = pendingTap_ || held_;
+  pendingTap_ = false;
+
+  // Decay the manual tap overlay (used when tapping a pad while in Glow mode).
+  if (activeTap) {
+    tapPulse_ = 1.0f;
+  } else {
+    const uint16_t tapTau = s.releaseMs > 0 ? s.releaseMs : 150;
+    tapPulse_ = approach(tapPulse_, 0.0f, dtMs, tapTau);
+    if (tapPulse_ < 0.002f) {
+      tapPulse_ = 0.0f;
+    }
   }
 
   float b;
@@ -84,10 +112,13 @@ uint32_t Led::update(const LedSettings &s, float level, const BeatInfo &beat,
     const float wave = 0.5f - 0.5f * cosf(kTwoPi * phase_);
     const float loPct = (float)s.glowMinPct / 100.0f;
     const float hiPct = (float)s.glowMaxPct / 100.0f;
-    b = loPct + (hiPct - loPct) * wave;
+    b = loPct + (hiPct - loPct) * wave + tapPulse_;
   } else {
     const float gate = (float)s.gatePct / 100.0f;
-    const float inLevel = clamp01(level);
+    // In Manual mode, ignore the microphone so only fingertip taps (and echoes)
+    // drive the envelope.
+    const float inLevel =
+        s.mode == LedSettings::kManual ? 0.0f : clamp01(level);
     // Level as it will appear after the gate, from the microphone only: the
     // synthetic echoes must never retrigger the detector.
     const float inGated =
@@ -102,7 +133,7 @@ uint32_t Led::update(const LedSettings &s, float level, const BeatInfo &beat,
     // Replay the trigger: each repeat re-injects its amplitude, so the normal
     // release shape carries it and no extra envelope is needed. Played before
     // the detector so a freshly scheduled echo gets its full first interval.
-    if (echoLeft_ > 0) {
+    if (!activeTap && echoLeft_ > 0) {
       const uint32_t step = echoNextMs_ > dtMs ? dtMs : echoNextMs_;
       echoNextMs_ -= step;
       if (echoNextMs_ == 0) {
@@ -114,6 +145,17 @@ uint32_t Led::update(const LedSettings &s, float level, const BeatInfo &beat,
         }
         echoAmp_ *= (float)s.echoFeedbackPct / 100.0f;
         echoLeft_--;
+        echoNextMs_ = s.echoSpacingMs;
+      }
+    }
+
+    // Manual drum-pad hit or hold: stay at full peak while pressed, and arm
+    // the echo sequence to fire once released.
+    if (activeTap) {
+      smoothed_ = 1.0f;
+      if (s.echoCount > 0) {
+        echoLeft_ = s.echoCount;
+        echoAmp_ = (float)s.echoFeedbackPct / 100.0f;
         echoNextMs_ = s.echoSpacingMs;
       }
     }
@@ -142,11 +184,12 @@ uint32_t Led::update(const LedSettings &s, float level, const BeatInfo &beat,
     // The gate keeps the light dark in a quiet room and rescales the rest, so
     // a soft passage still uses the whole output range.
     b = smoothed_ <= gate ? 0.0f : (smoothed_ - gate) / (1.0f - gate);
+  }
 
-    // Every beat adds a flash on top of whatever the music is doing.
-    if (s.beatMode == LedSettings::kBeatBoost && beat.pulse > 0.0f) {
-      b += ((float)s.beatBoostPct / 100.0f) * beat.pulse;
-    }
+  // Every beat adds a flash on top of whatever the channel is doing (reactive
+  // level or slow glow cycle).
+  if (s.beatMode == LedSettings::kBeatBoost && beat.pulse > 0.0f) {
+    b += ((float)s.beatBoostPct / 100.0f) * beat.pulse;
   }
 
   brightness_ = clamp01(b);

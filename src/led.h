@@ -21,6 +21,22 @@ public:
   // is what the shared beat detector reported for this frame.
   uint32_t update(const LedSettings &s, float level, const BeatInfo &beat, uint32_t dtMs);
 
+  // Fires an immediate manual pulse (from the web drum pad), using this
+  // channel's release decay and echo repeat settings.
+  void trigger() { pendingTap_ = true; }
+
+  // Holds the light at full brightness while a drum pad is pressed down;
+  // releasing starts the normal release decay and echo tail.
+  void setHeld(bool held) {
+    if (held) {
+      pendingTap_ = true;
+      held_ = true;
+      heldMs_ = 0;
+    } else {
+      held_ = false;
+    }
+  }
+
   float brightness() const { return brightness_; } // 0..1, as displayed
   uint32_t duty() const { return duty_; }
   bool isOn() const { return duty_ > 0; }
@@ -43,4 +59,8 @@ private:
   uint32_t sinceOnsetMs_ = 1000000u; // refractory timer, starts "long ago"
   float onsetRef_ = 0.0f;     // level the detector re-arms below
   bool armed_ = true;
+  bool pendingTap_ = false;   // manual drum-pad trigger queued for next update()
+  bool held_ = false;         // true while fingertip is holding the drum pad
+  uint32_t heldMs_ = 0;       // safety timeout counter while held_
+  float tapPulse_ = 0.0f;     // manual drum-pad pulse overlay (for glow mode)
 };

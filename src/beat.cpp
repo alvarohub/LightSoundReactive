@@ -54,6 +54,14 @@ BeatInfo BeatDetector::update(float onsetStrength, uint32_t dtMs, uint8_t sensPc
     sinceBeatMs_ = (uint32_t)kSaturateMs;
   }
 
+  // If no beat has arrived for two full maximum intervals, drop the tempo lock
+  // so silence does not keep reporting a stale BPM forever.
+  if (sinceBeatMs_ > kMaxIntervalMs * 2u) {
+    bpm_ = 0;
+    ioiCount_ = 0;
+    ioiPos_ = 0;
+  }
+
   const float x = onsetStrength > 0.0f ? onsetStrength : 0.0f;
 
   if (!primed_) {
